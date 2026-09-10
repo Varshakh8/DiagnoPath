@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in · DiagnoPath AI</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body class="login-body">
+  <div class="login-layout">
+    <section class="login-hero">
+      <p class="eyebrow">Hospital clinical workstation</p>
+      <h1>DiagnoPath AI</h1>
+      <p>
+        Sequential diagnosis for doctors: inquire symptoms, order only necessary
+        investigations, then record a diagnosis. Reinforcement Learning and
+        explanations plug in later without changing this workflow.
+      </p>
+      <ul>
+        <li>41 diseases · 4,962 patient cases</li>
+        <li>Cost-aware testing</li>
+        <li>Secure doctor login</li>
+      </ul>
+    </section>
+    <section class="login-card">
+      <h2>Doctor sign in</h2>
+      <p class="muted">Use your clinic credentials to open the workstation.</p>
+      {% if error %}
+      <div class="alert">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login">
+        <label>Username
+          <input name="username" autocomplete="username" required value="doctor" />
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="current-password" required value="clinic123" />
+        </label>
+        <button type="submit">Enter clinic</button>
+      </form>
+      <p class="hint">Demo accounts: <code>doctor</code> / <code>dr.mehta</code> · password <code>clinic123</code></p>
+    </section>
+  </div>
+</body>
+</html>

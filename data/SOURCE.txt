@@ -1,0 +1,50 @@
+Dataset source (Kaggle):
+https://www.kaggle.com/datasets/kaushil268/disease-prediction-using-machine-learning
+
+Downloaded via public GitHub mirror (same Training/Testing CSVs):
+https://github.com/anujdutt9/Disease-Prediction-from-Symptoms
+
+Patients: 4962 | Symptoms: 132 | Diseases: 41
+
+Diseases:
+- (vertigo) Paroymsal  Positional Vertigo (121)
+- AIDS (121)
+- Acne (121)
+- Alcoholic hepatitis (121)
+- Allergy (121)
+- Arthritis (121)
+- Bronchial Asthma (121)
+- Cervical spondylosis (121)
+- Chicken pox (121)
+- Chronic cholestasis (121)
+- Common Cold (121)
+- Dengue (121)
+- Diabetes (121)
+- Dimorphic hemmorhoids(piles) (121)
+- Drug Reaction (121)
+- Fungal infection (122)
+- GERD (121)
+- Gastroenteritis (121)
+- Heart attack (121)
+- Hepatitis B (121)
+- Hepatitis C (121)
+- Hepatitis D (121)
+- Hepatitis E (121)
+- Hypertension (121)
+- Hyperthyroidism (121)
+- Hypoglycemia (121)
+- Hypothyroidism (121)
+- Impetigo (121)
+- Jaundice (121)
+- Malaria (121)
+- Migraine (121)
+- Osteoarthristis (121)
+- Paralysis (brain hemorrhage) (121)
+- Peptic ulcer diseae (121)
+- Pneumonia (121)
+- Psoriasis (121)
+- Tuberculosis (121)
+- Typhoid (121)
+- Urinary tract infection (121)
+- Varicose veins (121)
+- hepatitis A (121)

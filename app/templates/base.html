@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}DiagnoPath AI{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">DP</span>
+        <div>
+          <strong>DiagnoPath AI</strong>
+          <small>Clinical Decision Support</small>
+        </div>
+      </div>
+      <nav>
+        <a href="/app" class="{% if request.url.path == '/app' %}active{% endif %}">Dashboard</a>
+        <a href="/app/history" class="{% if request.url.path == '/app/history' %}active{% endif %}">Case history</a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="avatar">{{ doctor.full_name[:1] }}</div>
+        <div>
+          <strong>{{ doctor.full_name }}</strong>
+          <small>{{ doctor.specialty }}</small>
+        </div>
+        <a class="logout" href="/logout">Sign out</a>
+      </div>
+    </aside>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

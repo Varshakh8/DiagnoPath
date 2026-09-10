@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}History · DiagnoPath AI{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Your work</p>
+    <h1>Completed consultations</h1>
+  </div>
+</header>
+<section class="panel">
+  {% if cases %}
+  <table>
+    <thead>
+      <tr>
+        <th>Patient</th>
+        <th>Your diagnosis</th>
+        <th>Recorded label</th>
+        <th>Match</th>
+        <th>Steps</th>
+        <th>Cost</th>
+        <th>Finished</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cases %}
+      <tr>
+        <td>{{ c.patient_id }}</td>
+        <td>{{ c.diagnosis or "—" }}</td>
+        <td>{{ c.true_label or "—" }}</td>
+        <td>{% if c.correct %}Yes{% else %}No{% endif %}</td>
+        <td>{{ c.steps }}</td>
+        <td>{{ c.total_cost }}</td>
+        <td>{{ (c.finished_at or "")[:16].replace("T", " ") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No completed cases yet. Start a consultation from the dashboard.</p>
+  {% endif %}
+</section>
+{% endblock %}
