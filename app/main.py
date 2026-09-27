@@ -18,9 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-from app import clinic, db
-
+from app import clinic, db, rl_service
 
 # ---------------------------------------------------------
 # Paths and Templates
@@ -551,24 +549,26 @@ def api_history(request: Request):
 # =========================================================
 # MEMBER 2 - REINFORCEMENT LEARNING HOOK
 # =========================================================
+# =========================================================
+# MEMBER 2 - REINFORCEMENT LEARNING HOOK
+# =========================================================
 
 @app.get("/api/rl/suggest")
-def api_rl_stub(request: Request):
+def api_rl_suggest(
+    request: Request,
+    case_id: str,
+):
 
     """
-    Member 2 integration point.
+    Returns the trained RL agent's suggested next action
+    (ask / test / diagnose) for the given live case.
 
-    Member 2 will replace this stub with the custom
-    reinforcement-learning policy.
-
-    Expected responsibility:
-        - Receive the current diagnostic state
-        - Encode the state
-        - Select the next action
-        - Return ask/test/diagnose recommendation
+    Call as: GET /api/rl/suggest?case_id=<the case's id>
     """
 
-    if not current_doctor(request):
+    doctor = current_doctor(request)
+
+    if not doctor:
         return JSONResponse(
             {
                 "error": "unauthorized"
@@ -576,14 +576,30 @@ def api_rl_stub(request: Request):
             status_code=401,
         )
 
-    return {
-        "status": "not_implemented",
-        "owner": "Member 2",
-        "message": (
-            "Connect the custom RL policy here "
-            "to recommend the next ask/test/diagnose action."
-        ),
-    }
+    try:
+
+        return rl_service.suggest_action(
+            case_id,
+            doctor["id"],
+        )
+
+    except KeyError:
+
+        return JSONResponse(
+            {
+                "error": "consultation not found"
+            },
+            status_code=404,
+        )
+
+    except FileNotFoundError as exc:
+
+        return JSONResponse(
+            {
+                "error": str(exc)
+            },
+            status_code=503,
+        )
 
 
 # =========================================================

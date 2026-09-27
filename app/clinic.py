@@ -81,6 +81,15 @@ def get_case(case_id: str, doctor_id: int) -> Dict[str, Any]:
     rec = _require_case(case_id, doctor_id)
     return _case_payload(case_id, rec)
 
+def get_env(case_id: str, doctor_id: int) -> DiagnosticEnvironment:
+    """
+    Public accessor for the live DiagnosticEnvironment behind a
+    case, so other modules (e.g. app/rl_service.py) can inspect
+    current state / available actions without reaching into the
+    private _live dict directly.
+    """
+    rec = _require_case(case_id, doctor_id)
+    return rec["env"]
 
 def apply_action(case_id: str, doctor_id: int, action_type: str, target: str) -> Dict[str, Any]:
     rec = _require_case(case_id, doctor_id)
