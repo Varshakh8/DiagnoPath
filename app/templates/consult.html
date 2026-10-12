@@ -1,42 +1,108 @@
+
 {% extends "base.html" %}
-{% block title %}Consultation · DiagnoPath AI{% endblock %}
+{% block title %}AI Consultation · DiagnoPath AI{% endblock %}
+
 {% block content %}
 <header class="page-head">
   <div>
-    <p class="eyebrow">Live consultation</p>
-    <h1 id="case-title">Opening case…</h1>
-    <p class="muted">Ask symptoms, order tests only if needed, then diagnose. Ground-truth disease stays hidden.</p>
+    <p class="eyebrow">DiagnoPath AI · Reinforcement Learning</p>
+    <h1 id="case-title">AI-assisted consultation</h1>
+    <p class="muted">
+      The agent asks about symptoms, requests investigations when selected,
+      and produces an experimental prediction.
+    </p>
   </div>
   <a class="ghost" href="/app">Back to dashboard</a>
 </header>
 
 <section class="consult-grid">
   <div class="panel">
-    <h2>Clinical actions</h2>
-    <div class="metric-row" id="metrics"></div>
-    <div class="tabs">
-      <button data-tab="symptoms" class="active">Ask symptom</button>
-      <button data-tab="tests">Order test</button>
-      <button data-tab="diagnose">Diagnose</button>
-    </div>
-    <input id="action-filter" placeholder="Filter list…" />
-    <div id="action-list" class="action-list"></div>
+    <h2>Sequential AI consultation</h2>
+
+    <p class="muted">
+      Start the consultation and answer each question using the patient's
+      actual symptoms and investigation results.
+    </p>
+
+    <button id="ai-suggest-btn" type="button">
+      🤖 Ask the AI
+    </button>
+
+    <div id="ai-suggestion" style="margin-top: 16px;"></div>
+
+    <div id="ai-progress" class="metric-row" style="margin-top: 16px;"></div>
   </div>
 
   <div class="stack">
     <div class="panel">
       <h2>Revealed findings</h2>
-      <div id="findings" class="findings"></div>
+      <div id="findings" class="findings">
+        <p class="muted">Start an AI consultation to collect findings.</p>
+      </div>
     </div>
+
     <div class="panel">
       <h2>Clinical timeline</h2>
-      <ol id="timeline" class="timeline"></ol>
+      <ol id="timeline" class="timeline">
+        <li>Waiting for consultation to start.</li>
+      </ol>
     </div>
+
     <div id="result-banner" class="result hidden"></div>
   </div>
 </section>
+
+<details style="margin-top: 24px;">
+  <summary style="cursor: pointer; padding: 12px 0;">
+    Original simulated consultation (optional)
+  </summary>
+
+  <section class="consult-grid" style="margin-top: 12px;">
+    <div class="panel">
+      <h2>Simulated clinical actions</h2>
+      <p class="muted">
+        This is the original dataset-based workflow. Its metrics and actions
+        are separate from the manual AI consultation above.
+      </p>
+
+      <div class="metric-row" id="metrics"></div>
+
+      <div class="tabs">
+        <button data-tab="symptoms" class="active" type="button">
+          Ask symptom
+        </button>
+        <button data-tab="tests" type="button">
+          Order test
+        </button>
+        <button data-tab="diagnose" type="button">
+          Diagnose
+        </button>
+      </div>
+
+      <input id="action-filter" placeholder="Filter list…" />
+      <div id="action-list" class="action-list"></div>
+    </div>
+
+    <div class="stack">
+      <div class="panel">
+        <h2>Simulated findings</h2>
+        <div id="legacy-findings" class="findings"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Simulated timeline</h2>
+        <ol id="legacy-timeline" class="timeline"></ol>
+      </div>
+
+      <div id="legacy-result-banner" class="result hidden"></div>
+    </div>
+  </section>
+</details>
 {% endblock %}
+
 {% block scripts %}
-<script>window.CASE_ID = {{ case_id|tojson }};</script>
+<script>
+  window.CASE_ID = {{ case_id|tojson }};
+</script>
 <script src="/static/js/consult.js"></script>
 {% endblock %}

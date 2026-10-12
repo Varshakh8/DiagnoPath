@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}Live consultation · DiagnoPath AI{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Live consultation · real patient</p>
+    <h1>Live patient interview</h1>
+    <p class="muted">No stored record is used. Answer the AI's questions for the patient in front of you, and it decides what to ask next.</p>
+  </div>
+  <a class="ghost" href="/app">Back to dashboard</a>
+</header>
+
+<section class="consult-grid">
+  <div class="panel">
+    <h2>AI interviewer</h2>
+    <button id="start-btn" class="ghost" type="button">▶ Start new live consultation</button>
+    <p id="status" class="muted"></p>
+    <div id="ai-box" style="margin: 12px 0;"></div>
+
+    <div id="add-box" style="display:none; margin-top:16px;">
+      <h2>Add a finding yourself</h2>
+      <select id="feature-select"></select>
+      <button id="add-present" type="button">Present</button>
+      <button id="add-absent" type="button">Absent</button>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="panel">
+      <h2>Findings so far</h2>
+      <div id="findings"></div>
+    </div>
+    <div class="panel">
+      <h2>Leading diagnoses</h2>
+      <ol id="top-list"></ol>
+      <p class="muted">Scores are the model's internal values, not probabilities.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+{% raw %}
+<script>
+(function () {
+  let sid = null;
+
+  const $ = function (id) { return document.getElementById(id); };
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function setStatus(msg) {
+    $("status").textContent = msg || "";
+  }
+
+  async function api(method, url, body) {
+    const res = await fetch(url, {
+      method: method,
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error("HTTP " + res.status + ": " + text.slice(0, 200));
+    }
+    if (!res.ok) {
+      throw new Error(data.error || ("HTTP " + res.status));
+    }
+    return data;
+  }
+
+  function fillSelect(features) {
+    const sel = $("feature-select");
+    sel.textContent = "";
+    features
+      .slice()
+      .sort(function (a, b) { return a.label.localeCompare(b.label); })
+      .forEach(function (f) {
+        const o = document.createElement("option");
+        o.value = f.name;
+        o.textContent = f.label + (f.kind === "test" ? " (test)" : "");
+        sel.appendChild(o);
+      });
+  }
+
+  function renderFindings(findings) {
+    const box = $("findings");
+    box.textContent = "";
+
+    if (!findings.length) {
+      box.appendChild(el("p", "muted", "No findings yet. Answer the AI's first question."));
+      return;
+    }
+
+    findings.forEach(function (f) {
+      const row = el("div");
+      row.style.margin = "6px 0";
+
+      const label =
+        (f.kind === "test" ? "Test" : "Symptom") + ": " + f.label +
+        " · " + (f.present ? "Present" : "Absent");
+      row.appendChild(el("span", "tag " + (f.present ? "yes" : "no"), label));
+      row.appendChild(document.createTextNode(" "));
+
+      const flip = el("button", "ghost", "Flip");
+      flip.type = "button";
+      flip.addEventListener("click", function () { answer(f.name, !f.present); });
+      row.appendChild(flip);
+
+      const rm = el("button", "ghost", "Remove");
+      rm.type = "button";
+      rm.addEventListener("click", function () { answer(f.name, null); });
+      row.appendChild(rm);
+
+      box.appendChild(row);
+    });
+  }
+
+  function renderTop(top) {
+    const list = $("top-list");
+    list.textContent = "";
+    top.forEach(function (t) {
+      list.appendChild(el("li", null, t.disease + "  (score " + t.score + ")"));
+    });
+  }
+
+  function renderAi(s) {
+    const box = $("ai-box");
+    box.textContent = "";
+
+    if (s.type === "diagnose") {
+      box.appendChild(el("p", "tag yes", "AI recommends diagnosing: " + s.label));
+      if (s.forced) {
+        box.appendChild(el("p", "muted",
+          "The AI asked many questions without reaching a confident decision, so this is its best guess."));
+      }
+      box.appendChild(el("p", "muted",
+        "You can still add, flip or remove findings, and the recommendation will update."));
+      return;
+    }
+
+    const text = s.type === "test"
+      ? "Is this present / positive: " + s.label + "?"
+      : "Does the patient have: " + s.label + "?";
+
+    const q = el("p", null, text);
+    q.style.fontSize = "1.1rem";
+    q.style.fontWeight = "600";
+    box.appendChild(q);
+
+    const yes = el("button", null, "Yes");
+    yes.type = "button";
+    yes.addEventListener("click", function () { answer(s.target, true); });
+
+    const no = el("button", null, "No");
+    no.type = "button";
+    no.addEventListener("click", function () { answer(s.target, false); });
+
+    box.appendChild(yes);
+    box.appendChild(document.createTextNode(" "));
+    box.appendChild(no);
+  }
+
+  function render(data) {
+    $("add-box").style.display = "block";
+    renderFindings(data.findings);
+    renderTop(data.suggestion.top);
+    renderAi(data.suggestion);
+  }
+
+  async function start() {
+    setStatus("Starting…");
+    try {
+      const data = await api("POST", "/api/live/start");
+      sid = data.session_id;
+      fillSelect(data.features);
+      window.history.replaceState(null, "", "/app/live?session=" + encodeURIComponent(sid));
+      render(data);
+      setStatus("");
+    } catch (e) {
+      setStatus("Error: " + e.message);
+    }
+  }
+
+  async function answer(target, present) {
+    if (!sid) return;
+    setStatus("Updating…");
+    try {
+      const data = await api(
+        "POST",
+        "/api/live/" + encodeURIComponent(sid) + "/answer",
+        { target: target, present: present }
+      );
+      render(data);
+      setStatus("");
+    } catch (e) {
+      setStatus("Error: " + e.message);
+    }
+  }
+
+  async function restore() {
+    const id = new URLSearchParams(window.location.search).get("session");
+    if (!id) return;
+    try {
+      const data = await api("GET", "/api/live/" + encodeURIComponent(id));
+      sid = data.session_id;
+      fillSelect(data.features);
+      render(data);
+    } catch (e) {
+      setStatus("Previous session not found. Start a new one.");
+    }
+  }
+
+  $("start-btn").addEventListener("click", start);
+  $("add-present").addEventListener("click", function () {
+    if (sid) answer($("feature-select").value, true);
+  });
+  $("add-absent").addEventListener("click", function () {
+    if (sid) answer($("feature-select").value, false);
+  });
+
+  restore();
+})();
+</script>
+{% endraw %}
+{% endblock %}
