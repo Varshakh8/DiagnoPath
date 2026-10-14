@@ -176,3 +176,50 @@ th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--lin
   .login-layout, .app-shell, .consult-grid, .stat-grid { grid-template-columns: 1fr; }
   .sidebar { flex-direction: row; flex-wrap: wrap; }
 }
+.xai-panel {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid #d8dce3;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.xai-panel h3 {
+  margin-top: 0;
+}
+
+.xai-panel button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.xai-panel button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+#xai-result {
+  margin-top: 12px;
+}
+
+#xai-result li {
+  margin: 6px 0;
+}
+
+.xai-panel .muted {
+  color: #606977;
+  font-size: 0.9rem;
+}
+.xai-panel {
+  margin-top: 16px;
+}
+
+#xai-result {
+  margin-top: 12px;
+}
+
+#xai-result li {
+  margin: 6px 0;
+}

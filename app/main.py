@@ -13,7 +13,7 @@ import sqlite3
 import sys
 from pathlib import Path
 from uuid import uuid4
-
+from app import xai_service
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -884,16 +884,49 @@ async def answer_manual_question(request: Request, case_id: str):
 # MEMBER 3 - XAI INTEGRATION POINT
 # =========================================================
 
-@app.get("/api/xai/explain")
-def api_xai_stub(request: Request):
-    if not current_doctor(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-    return {
-        "status": "not_implemented",
-        "owner": "Member 3",
-        "message": (
-            "Member 3 can replace this endpoint with SHAP/LIME "
-            "or another project-approved explanation method."
-        ),
-    }
+@app.get("/api/xai/explain")
+def api_xai_explain(request: Request, case_id: str):
+    """Explain a manual or live RL consultation."""
+
+    doctor = current_doctor(request)
+
+    if not doctor:
+        return JSONResponse(
+            {"error": "unauthorized"},
+            status_code=401,
+        )
+
+    # First, check whether this is a manual RL consultation.
+    try:
+        manual_case = _manual_case_for(case_id, doctor["id"])
+    except KeyError:
+        manual_case = None
+
+    if manual_case is not None:
+        try:
+            return xai_service.explain_manual_case(manual_case)
+        except FileNotFoundError as exc:
+            return JSONResponse(
+                {"error": str(exc)},
+                status_code=503,
+            )
+        except (ValueError, IndexError) as exc:
+            return JSONResponse(
+                {"error": str(exc)},
+                status_code=500,
+            )
+
+    # Otherwise, preserve the existing live consultation flow.
+    try:
+        return xai_service.explain_action(case_id, doctor["id"])
+    except KeyError:
+        return JSONResponse(
+            {"error": "Consultation not found in manual or live records."},
+            status_code=404,
+        )
+    except FileNotFoundError as exc:
+        return JSONResponse(
+            {"error": str(exc)},
+            status_code=503,
+        )

@@ -1,4 +1,3 @@
-
 "use strict";
 
 // =========================================================
@@ -22,6 +21,7 @@ const legacyResultBanner = document.getElementById("legacy-result-banner");
 const findings = document.getElementById("findings");
 const timeline = document.getElementById("timeline");
 const resultBanner = document.getElementById("result-banner");
+
 const progress = document.getElementById("ai-progress");
 
 const aiSuggestBtn = document.getElementById("ai-suggest-btn");
@@ -36,6 +36,9 @@ let manualCompleted = false;
 // =========================================================
 // ORIGINAL SIMULATED CONSULTATION — PRESERVED
 // =========================================================
+
+const xaiButton = document.getElementById("explain-xai-btn");
+const xaiResult = document.getElementById("xai-result");
 
 function chip(label, value) {
   const span = document.createElement("span");
@@ -214,14 +217,132 @@ async function act(type, target) {
   }
 }
 
-document.querySelectorAll(".tabs button").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".tabs button").forEach((item) => {
-      item.classList.remove("active");
+// =========================================================
+// MEMBER 3 — EXPLAINABLE AI
+// =========================================================
+
+
+async function explainRecommendation() {
+  if (!xaiButton || !xaiResult) {
+    console.error("XAI button or result panel was not found.");
+    return;
+  }
+
+  // XAI must use the active manual RL consultation ID.
+  const activeCaseId =
+    manualCaseId ||
+    localStorage.getItem("diagnopath_manual_case_id");
+
+  if (!activeCaseId) {
+    xaiResult.textContent =
+      "Start an AI consultation before requesting an explanation.";
+    return;
+  }
+
+  xaiButton.disabled = true;
+  xaiButton.textContent = "Loading explanation...";
+  xaiResult.textContent = "Getting explanation from the RL agent...";
+
+  try {
+    const activeCaseId =
+  manualCaseId ||
+  localStorage.getItem("diagnopath_manual_case_id");
+
+if (!activeCaseId) {
+  throw new Error("Please start an AI consultation first.");
+}
+
+const res = await fetch(
+  `/api/xai/explain?case_id=${encodeURIComponent(activeCaseId)}`
+);
+
+    const data = await res.json();
+
+    if (!res.ok || data.status !== "ok") {
+      throw new Error(
+        data.detail ||
+        data.message ||
+        data.error ||
+        `Could not get explanation (HTTP ${res.status}).`
+      );
+    }
+
+    xaiResult.replaceChildren();
+
+    const action = document.createElement("p");
+    action.textContent =
+      `Recommended action: ${data.action.type} — ${data.action.label}`;
+    xaiResult.appendChild(action);
+
+    const score = document.createElement("p");
+    score.textContent = `Q-score: ${data.q_score}`;
+    xaiResult.appendChild(score);
+
+    function addContributions(headingText, items) {
+      const heading = document.createElement("h4");
+      heading.textContent = headingText;
+      xaiResult.appendChild(heading);
+
+      if (!Array.isArray(items) || items.length === 0) {
+        const empty = document.createElement("p");
+        empty.textContent =
+          "No non-zero known-feature contributions were found.";
+        xaiResult.appendChild(empty);
+        return;
+      }
+
+      const list = document.createElement("ul");
+
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent =
+          `${item.feature} (${item.finding}): ${item.contribution}`;
+        list.appendChild(li);
+      });
+
+      xaiResult.appendChild(list);
+    }
+
+    addContributions(
+      "Top positive contributions",
+      data.top_positive_contributions
+    );
+
+    addContributions(
+      "Top negative contributions",
+      data.top_negative_contributions
+    );
+
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent = data.note || 
+      "These are model-score contributions, not disease probabilities.";
+    xaiResult.appendChild(note);
+
+  } catch (error) {
+    console.error("XAI explanation failed:", error);
+    xaiResult.textContent = error.message ||
+      "Failed to load the explanation.";
+  } finally {
+    xaiButton.disabled = false;
+    xaiButton.textContent = "Explain Recommendation";
+  }
+}
+
+xaiButton.addEventListener("click", explainRecommendation);
+
+// =========================================================
+// ORIGINAL SIMULATED CONSULTATION — TAB HANDLING
+// =========================================================
+
+document.querySelectorAll(".tabs button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tabs button").forEach((button) => {
+      button.classList.remove("active");
     });
 
-    button.classList.add("active");
-    tab = button.dataset.tab;
+    btn.classList.add("active");
+    tab = btn.dataset.tab;
     drawActions();
   });
 });

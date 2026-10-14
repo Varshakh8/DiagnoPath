@@ -1,5 +1,6 @@
-
+```html
 {% extends "base.html" %}
+
 {% block title %}AI Consultation · DiagnoPath AI{% endblock %}
 
 {% block content %}
@@ -16,6 +17,7 @@
 </header>
 
 <section class="consult-grid">
+  <!-- Main sequential AI consultation -->
   <div class="panel">
     <h2>Sequential AI consultation</h2>
 
@@ -30,19 +32,44 @@
 
     <div id="ai-suggestion" style="margin-top: 16px;"></div>
 
-    <div id="ai-progress" class="metric-row" style="margin-top: 16px;"></div>
+    <div
+      id="ai-progress"
+      class="metric-row"
+      style="margin-top: 16px;"
+    ></div>
+
+    <!-- Member 3: Explainable AI -->
+    <section class="panel xai-panel">
+      <h2>Explain RL Recommendation</h2>
+
+      <p class="muted">
+        View the feature contributions associated with the agent's
+        recommended action.
+      </p>
+
+      <button id="explain-xai-btn" type="button">
+        Explain Recommendation
+      </button>
+
+      <div id="xai-result" aria-live="polite"></div>
+    </section>
   </div>
 
+  <!-- Findings and timeline for the main consultation -->
   <div class="stack">
     <div class="panel">
       <h2>Revealed findings</h2>
+
       <div id="findings" class="findings">
-        <p class="muted">Start an AI consultation to collect findings.</p>
+        <p class="muted">
+          Start an AI consultation to collect findings.
+        </p>
       </div>
     </div>
 
     <div class="panel">
       <h2>Clinical timeline</h2>
+
       <ol id="timeline" class="timeline">
         <li>Waiting for consultation to start.</li>
       </ol>
@@ -52,6 +79,7 @@
   </div>
 </section>
 
+<!-- Original dataset-based consultation -->
 <details style="margin-top: 24px;">
   <summary style="cursor: pointer; padding: 12px 0;">
     Original simulated consultation (optional)
@@ -60,26 +88,35 @@
   <section class="consult-grid" style="margin-top: 12px;">
     <div class="panel">
       <h2>Simulated clinical actions</h2>
+
       <p class="muted">
         This is the original dataset-based workflow. Its metrics and actions
-        are separate from the manual AI consultation above.
+        are separate from the sequential AI consultation above.
       </p>
 
+      <!-- These IDs are used by the existing JavaScript -->
       <div class="metric-row" id="metrics"></div>
 
       <div class="tabs">
         <button data-tab="symptoms" class="active" type="button">
           Ask symptom
         </button>
+
         <button data-tab="tests" type="button">
           Order test
         </button>
+
         <button data-tab="diagnose" type="button">
           Diagnose
         </button>
       </div>
 
-      <input id="action-filter" placeholder="Filter list…" />
+      <input
+        id="action-filter"
+        type="text"
+        placeholder="Filter list…"
+      />
+
       <div id="action-list" class="action-list"></div>
     </div>
 
@@ -102,7 +139,8 @@
 
 {% block scripts %}
 <script>
-  window.CASE_ID = {{ case_id|tojson }};
+  window.CASE_ID = {{ case_id | tojson }};
 </script>
-<script src="/static/js/consult.js"></script>
+<script src="/static/js/consult.js?v=2"></script>
 {% endblock %}
+```
