@@ -106,7 +106,7 @@ MAX_STEPS = 30
 SEED = 42
 
 MODEL_PATH = Path(
-    "models/diagnostic_linear_q.json"
+    "models/diagnostic_linear_q_warmstart_experiment.json"
 )
 
 # How often (in episodes) to print training progress.
@@ -160,29 +160,27 @@ def build_full_state(
     return symptom_tuple + test_tuple
 
 
+
 def build_partial_state(
     full_values: list[int],
     rng: random.Random,
     n_known: int,
+    n_symptoms: int = 95,
 ) -> tuple:
     """
-    Mask a fully-known feature list down to n_known randomly
-    chosen positions (their real 0/1 value), with every other
-    position set to -1 (unknown). This mirrors what the agent
-    actually sees at diagnosis time during a real episode -- a
-    small, randomly-ordered subset of symptoms/tests revealed,
-    not the full patient record. Training the diagnose weights
-    only on fully-known states (all features revealed) does not
-    transfer to this sparse regime; the weights need to have
-    actually seen sparse, mostly-unknown feature vectors during
-    training to generalize to them.
+    Create a realistic partial state for warm-start training.
+
+    Only symptom values are revealed in this helper.
+    Investigation results remain unknown until a later
+    training example explicitly models ordered tests.
     """
 
     n = len(full_values)
-    n_known = max(0, min(n_known, n))
+    n_symptoms = max(0, min(n_symptoms, n))
+    n_known = max(0, min(n_known, n_symptoms))
 
     revealed_indices = rng.sample(
-        range(n),
+        range(n_symptoms),
         n_known,
     )
 
@@ -192,6 +190,7 @@ def build_partial_state(
         state[index] = full_values[index]
 
     return tuple(state)
+
 
 
 def warm_start_diagnose_weights(
@@ -230,7 +229,7 @@ def warm_start_diagnose_weights(
         for patient_index in indices
     }
 
-    n_features = META.n_symptoms
+    n_features = len(META.inquiry_symptoms)
 
     def run_epoch(get_state, epoch_label: str) -> float:
         """
@@ -313,13 +312,16 @@ def warm_start_diagnose_weights(
 
     for epoch in range(1, WARM_START_PARTIAL_EPOCHS + 1):
 
+        
         def masked_state(idx, _rng=rng_local, _n=n_features):
             n_known = _rng.randint(1, _n)
             return build_partial_state(
                 full_values_by_index[idx],
                 _rng,
                 n_known,
+                len(META.inquiry_symptoms),
             )
+
 
         run_epoch(
             masked_state,
@@ -587,15 +589,14 @@ def train():
             episode_reward += reward
 
             if done:
-
-                episode_correct = bool(
-                    info.get(
-                        "correct",
-                        False,
+                episode_result = info.get("episode")
+                episode_correct = (
+                    episode_result.correct
+                    if episode_result is not None
+                    else False
                     )
-                )
-
                 break
+
 
         # -------------------------------------------------
         # Decay exploration

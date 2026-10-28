@@ -12,12 +12,14 @@ MODEL_PATH = Path("models/diagnostic_linear_q.json")
 SEED = 42
 MAX_STEPS = 30
 
+DEBUG_LABELS = ("Hepatitis D", "Hepatitis E")
+DEBUG_STEPS = (0, 2, 28)
+
 
 def evaluate():
     random.seed(SEED)
 
     env = DiagnosticEnvironment()
-
     agent = LinearQLearningAgent.load(MODEL_PATH)
 
     # No exploration during evaluation.
@@ -52,23 +54,71 @@ def evaluate():
         test_indices,
         start=1,
     ):
-
         observation = env.reset(patient_index)
 
         done = False
         episode_result = None
         steps = 0
 
+        true_label = env.dataset.get(patient_index).true_label()
+
         while not done and steps < MAX_STEPS:
-
-            state = encode_state_for_rl(
-                observation
-            )
-
+            state = encode_state_for_rl(observation)
             actions = env.available_actions()
 
             if not actions:
                 break
+
+            # Diagnostic debugging for Hepatitis D and E.
+            # This only reads Q-scores; it does not update the model.
+            if true_label in DEBUG_LABELS and steps in DEBUG_STEPS:
+                features = agent.state_features(state)
+
+                scored = [
+                    (
+                        agent._q_from_features(features, action),
+                        action.type.value,
+                        action.target,
+                    )
+                    for action in actions
+                ]
+
+                scored.sort(
+                    key=lambda item: item[0],
+                    reverse=True,
+                )
+
+                print(f"\n{true_label} | step {steps + 1}")
+
+                print("Top 5 actions overall:")
+                for score, action_type, target in scored[:5]:
+                    print(
+                        f"  {action_type:12s} "
+                        f"{target:40s} "
+                        f"Q={score:.3f}"
+                    )
+
+                diagnoses = [
+                    item
+                    for item in scored
+                    if item[1] == "diagnose"
+                ]
+
+                diagnoses.sort(
+                    key=lambda item: item[0],
+                    reverse=True,
+                )
+
+                print("Top 5 diagnosis actions:")
+                if diagnoses:
+                    for score, action_type, target in diagnoses[:5]:
+                        print(
+                            f"  {action_type:12s} "
+                            f"{target:40s} "
+                            f"Q={score:.3f}"
+                        )
+                else:
+                    print("  No diagnosis actions available.")
 
             action = agent.choose_action(
                 state,
@@ -76,9 +126,17 @@ def evaluate():
                 training=False,
             )
 
-            observation, reward, done, info = env.step(
-                action
-            )
+            observation, reward, done, info = env.step(action)
+
+            # Print the selected action for the two debug cases.
+            if true_label in DEBUG_LABELS:
+                print(
+                    f"  step={steps + 1}, "
+                    f"action={action.type.value}, "
+                    f"target={action.target}, "
+                    f"reward={reward:.2f}, "
+                    f"done={done}"
+                )
 
             # The environment returns EpisodeResult as
             # info["episode"] when diagnosis happens.
@@ -92,16 +150,11 @@ def evaluate():
         # -----------------------------------------------------
 
         if episode_result is not None:
-
             predicted = episode_result.predicted
             true_label = episode_result.true_label
-
         else:
-
             predicted = ""
-            true_label = env.dataset.get(
-                patient_index
-            ).true_label()
+            true_label = env.dataset.get(patient_index).true_label()
 
         is_correct = (
             predicted != ""
@@ -134,7 +187,6 @@ def evaluate():
         # -----------------------------------------------------
 
         if true_label not in disease_results:
-
             disease_results[true_label] = {
                 "total": 0,
                 "correct": 0,
@@ -185,18 +237,9 @@ def evaluate():
     )
     print(f"Average reward          : {avg_reward:.2f}")
     print(f"Average steps           : {avg_steps:.2f}")
-    print(
-        f"Average symptoms asked  : "
-        f"{avg_symptoms:.2f}"
-    )
-    print(
-        f"Average tests ordered   : "
-        f"{avg_tests:.2f}"
-    )
-    print(
-        f"Average diagnostic cost : "
-        f"{avg_cost:.2f}"
-    )
+    print(f"Average symptoms asked  : {avg_symptoms:.2f}")
+    print(f"Average tests ordered   : {avg_tests:.2f}")
+    print(f"Average diagnostic cost : {avg_cost:.2f}")
 
     # ---------------------------------------------------------
     # Per-disease results
@@ -209,7 +252,6 @@ def evaluate():
     print("=" * 60)
 
     for disease in sorted(disease_results):
-
         result = disease_results[disease]
 
         disease_accuracy = (
