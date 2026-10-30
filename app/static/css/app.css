@@ -223,3 +223,13 @@ th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--lin
 #xai-result li {
   margin: 6px 0;
 }
+/* RL diagnostic visualisations */
+.xai-method { margin: 16px 0; padding: 12px; border: 1px solid var(--border, #d9dee8); border-radius: 10px; }
+.xai-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(100px, 2fr) 64px; gap: 10px; align-items: center; margin: 8px 0; font-size: .9rem; }
+.xai-track { height: 12px; background: #e9edf4; border-radius: 20px; overflow: hidden; }
+.xai-fill { height: 100%; border-radius: 20px; background: #3478c8; }
+.xai-fill.negative { background: #c66b5c; }
+.score-row { display: grid; grid-template-columns: minmax(110px, 1fr) 2fr 54px; gap: 8px; align-items: center; margin: 9px 0; }
+.score-track { height: 10px; background: #e9edf4; border-radius: 20px; overflow: hidden; }
+.score-fill { height: 100%; background: #39866d; }
+.small { font-size: .82rem; }

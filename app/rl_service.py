@@ -29,7 +29,9 @@ from . import clinic
 
 ROOT = Path(__file__).resolve().parent.parent
 
-MODEL_PATH = ROOT / "models" / "diagnostic_linear_q.json"
+# Use the experimentally evaluated warm-start model (34/42 = 81.0% on
+# the repository's fixed held-out test split). Keep all other model files intact.
+MODEL_PATH = ROOT / "models" / "diagnostic_linear_q_warmstart_experiment.json"
 
 _agent: Optional[LinearQLearningAgent] = None
 

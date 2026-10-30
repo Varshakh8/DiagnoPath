@@ -1,183 +1,207 @@
-﻿(() => {
+(() => {
   "use strict";
 
   const container = document.getElementById("whatif-content");
   if (!container) return;
 
+  const escapeHTML = value => String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[c]);
+  const stateLabel = value => value === 1 ? "Present / Positive" : value === 0 ? "Absent / Negative" : "Unknown";
+
   container.innerHTML = `
-    <form id="whatif-form">
-      <p class="muted">
-        The baseline is loaded from your consultation history when available.
-        Change the values to explore a hypothetical cost scenario.
-      </p>
-
-      <p>
-        <label for="whatif-baseline">Baseline consultation cost</label><br>
-        <input id="whatif-baseline" type="number" min="0" step="0.01"
-          value="0" required>
-      </p>
-
-      <p>
-        <label for="whatif-count">Hypothetical additional investigations</label><br>
-        <input id="whatif-count" type="number" min="0" max="1000" step="1"
-          value="1" required>
-      </p>
-
-      <p>
-        <label for="whatif-unit-cost">Cost per additional investigation</label><br>
-        <input id="whatif-unit-cost" type="number" min="0" step="0.01"
-          value="3" required>
-      </p>
-
-      <button class="primary" type="submit">Calculate scenario</button>
-      <button id="whatif-reset" type="button">Reset</button>
-    </form>
-
-    <p id="whatif-source" class="muted" aria-live="polite">
-      Loading consultation history...
-    </p>
-
-    <div id="whatif-result" aria-live="polite">
-      Enter the scenario values and calculate.
+    <p class="muted">Create a baseline patient state, then change one or more findings. Both states are evaluated by the existing trained RL agent. This simulation never edits saved consultation records.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:14px 0;">
+      <label style="flex:2;min-width:220px;">Clinical feature<br><select id="wi-feature" style="width:100%;"></select></label>
+      <label style="flex:1;min-width:150px;">Baseline value<br><select id="wi-base" style="width:100%;"><option value="">Unknown</option><option value="0">Absent / Negative</option><option value="1">Present / Positive</option></select></label>
+      <label style="flex:1;min-width:150px;">What-if value<br><select id="wi-mod" style="width:100%;"><option value="">Unknown</option><option value="0">Absent / Negative</option><option value="1">Present / Positive</option></select></label>
+      <button id="wi-add" type="button">Add / Update finding</button>
     </div>
+    <div id="wi-findings"><p class="muted">No findings added yet. Add the patient's known symptoms or investigation results.</p></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0;">
+      <button id="wi-run" class="primary" type="button">Compare RL scenarios</button>
+      <button id="wi-clear" class="ghost" type="button">Clear scenario</button>
+    </div>
+    <p id="wi-status" class="muted" aria-live="polite"></p>
+    <div id="wi-results" aria-live="polite"></div>
   `;
 
-  const form = document.getElementById("whatif-form");
-  const baseline = document.getElementById("whatif-baseline");
-  const count = document.getElementById("whatif-count");
-  const unitCost = document.getElementById("whatif-unit-cost");
-  const result = document.getElementById("whatif-result");
-  const source = document.getElementById("whatif-source");
-  const reset = document.getElementById("whatif-reset");
+  const featureSelect = document.getElementById("wi-feature");
+  const baseSelect = document.getElementById("wi-base");
+  const modSelect = document.getElementById("wi-mod");
+  const rowsBox = document.getElementById("wi-findings");
+  const results = document.getElementById("wi-results");
+  const status = document.getElementById("wi-status");
+  const findings = new Map();
 
-  let loadedAverage = null;
+  const valueFrom = select => select.value === "" ? null : Number(select.value);
+  const valueOptions = selected => `
+    <option value="" ${selected === null ? "selected" : ""}>Unknown</option>
+    <option value="0" ${selected === 0 ? "selected" : ""}>Absent / Negative</option>
+    <option value="1" ${selected === 1 ? "selected" : ""}>Present / Positive</option>`;
 
-  const money = value => Number(value).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-
-  async function loadBaseline() {
-    try {
-      const response = await fetch("/api/history", {
-        headers: { Accept: "application/json" },
-        credentials: "same-origin",
-        cache: "no-store"
-      });
-
-      if (!response.ok) {
-        throw new Error(`History API returned HTTP ${response.status}.`);
-      }
-
-      const data = await response.json();
-      const average = Number(data?.stats?.avg_cost);
-
-      if (data?.stats?.avg_cost !== undefined &&
-          data?.stats?.avg_cost !== null &&
-          Number.isFinite(average) && average >= 0) {
-        loadedAverage = average;
-        baseline.value = average.toFixed(2);
-        source.textContent =
-          "Baseline loaded from the average cost of your completed consultations.";
-      } else {
-        source.textContent =
-          "No valid historical average was returned. Enter a baseline cost manually.";
-      }
-    } catch (error) {
-      console.error("What-if history loading failed:", error);
-      source.textContent =
-        "Could not load consultation history. You can still enter a baseline manually.";
-    }
-  }
-
-  function calculate(event) {
-    if (event) event.preventDefault();
-
-    const base = Number(baseline.value);
-    const investigations = Number(count.value);
-    const perInvestigation = Number(unitCost.value);
-
-    if (
-      baseline.value.trim() === "" ||
-      count.value.trim() === "" ||
-      unitCost.value.trim() === "" ||
-      !Number.isFinite(base) ||
-      !Number.isInteger(investigations) ||
-      !Number.isFinite(perInvestigation) ||
-      base < 0 ||
-      investigations < 0 ||
-      investigations > 1000 ||
-      perInvestigation < 0
-    ) {
-      result.innerHTML =
-        "<p role='alert'>Enter valid non-negative costs and a whole number of investigations (0–1000).</p>";
+  function renderFindings() {
+    if (!findings.size) {
+      rowsBox.innerHTML = '<p class="muted">No findings added yet.</p>';
       return;
     }
-
-    const additional = investigations * perInvestigation;
-    const projected = base + additional;
-    const difference = projected - base;
-    const maxValue = Math.max(base, projected, 1);
-    const baseWidth = Math.min(100, base / maxValue * 100);
-    const projectedWidth = Math.min(100, projected / maxValue * 100);
-
-    result.innerHTML = `
-      <h3>Scenario results</h3>
-
-      <div class="stat-grid">
-        <article>
-          <span>Baseline cost</span>
-          <strong>${money(base)}</strong>
-        </article>
-        <article>
-          <span>Additional cost</span>
-          <strong>${money(additional)}</strong>
-        </article>
-        <article>
-          <span>Projected total</span>
-          <strong>${money(projected)}</strong>
-        </article>
-        <article>
-          <span>Cost increase</span>
-          <strong>+${money(difference)}</strong>
-        </article>
-      </div>
-
-      <h3>Cost comparison</h3>
-      <div style="margin:12px 0;">
-        <div style="display:flex;justify-content:space-between;gap:12px;">
-          <span>Baseline</span><strong>${money(base)}</strong>
-        </div>
-        <div style="height:12px;background:var(--line,#e5e7eb);border-radius:8px;overflow:hidden;margin-top:5px;">
-          <div style="height:100%;width:${baseWidth}%;background:#287d8e;border-radius:8px;"></div>
-        </div>
-      </div>
-
-      <div style="margin:12px 0;">
-        <div style="display:flex;justify-content:space-between;gap:12px;">
-          <span>Hypothetical total</span><strong>${money(projected)}</strong>
-        </div>
-        <div style="height:12px;background:var(--line,#e5e7eb);border-radius:8px;overflow:hidden;margin-top:5px;">
-          <div style="height:100%;width:${projectedWidth}%;background:#25866d;border-radius:8px;"></div>
-        </div>
-      </div>
-
-      <p class="muted">
-        This is a cost-only illustration based on the values entered.
-        It does not recommend investigations or determine whether a test
-        can be omitted. No saved consultation records were changed.
-      </p>
-    `;
+    rowsBox.innerHTML = `<div style="overflow-x:auto;"><table><thead><tr><th>Finding</th><th>Baseline</th><th>What-if</th><th></th></tr></thead><tbody>${
+      [...findings.entries()].map(([name, item]) => `
+        <tr data-feature="${escapeHTML(name)}">
+          <td>${escapeHTML(item.label)} <small class="muted">(${escapeHTML(item.kind)})</small></td>
+          <td><select class="wi-row-base">${valueOptions(item.baseline)}</select></td>
+          <td><select class="wi-row-mod">${valueOptions(item.modified)}</select></td>
+          <td><button type="button" class="ghost wi-remove">Remove</button></td>
+        </tr>`).join("")}</tbody></table></div>`;
+    rowsBox.querySelectorAll("tr[data-feature]").forEach(row => {
+      const name = row.dataset.feature;
+      row.querySelector(".wi-row-base").addEventListener("change", event => {
+        findings.get(name).baseline = event.target.value === "" ? null : Number(event.target.value);
+      });
+      row.querySelector(".wi-row-mod").addEventListener("change", event => {
+        findings.get(name).modified = event.target.value === "" ? null : Number(event.target.value);
+      });
+      row.querySelector(".wi-remove").addEventListener("click", () => {
+        findings.delete(name);
+        renderFindings();
+      });
+    });
   }
 
-  form.addEventListener("submit", calculate);
+  function scenarioObject(key) {
+    const output = {};
+    findings.forEach((item, name) => {
+      if (item[key] !== null) output[name] = item[key];
+    });
+    return output;
+  }
 
-  reset.addEventListener("click", () => {
-    baseline.value = loadedAverage === null ? "0" : loadedAverage.toFixed(2);
-    count.value = "1";
-    unitCost.value = "3";
-    result.textContent = "Enter the scenario values and calculate.";
+  function renderExplain(title, explanation) {
+    if (!explanation) return `<p class="muted">${title}: explanation unavailable.</p>`;
+    const methods = ["shap", "lime"].map(method => {
+      const item = explanation[method];
+      if (!item || item.status !== "ok") {
+        return `<div class="xai-method"><h4>${method.toUpperCase()}</h4><p class="muted">${escapeHTML(item?.message || "Not available")}</p></div>`;
+      }
+      const features = (item.features || []).slice(0, 6).map(feature => ({
+        label: feature.feature || feature.description || "Feature",
+        value: Number(feature.contribution !== undefined ? feature.contribution : feature.weight) || 0
+      }));
+      const max = Math.max(0.0001, ...features.map(f => Math.abs(f.value)));
+      const bars = features.map(feature => `
+        <div class="xai-row">
+          <span>${escapeHTML(feature.label)}</span>
+          <div class="xai-track"><div class="xai-fill ${feature.value < 0 ? "negative" : ""}" style="width:${Math.max(1, Math.abs(feature.value)/max*100)}%"></div></div>
+          <strong>${feature.value.toFixed(4)}</strong>
+        </div>`).join("");
+      return `<div class="xai-method"><h4>${method.toUpperCase()}</h4><p class="muted">${escapeHTML(item.note || "")}</p>${bars || '<p class="muted">No contributions returned.</p>'}</div>`;
+    }).join("");
+    return `<section style="margin-top:12px;"><h4>${escapeHTML(title)} — feature contribution visualisations</h4>${methods}</section>`;
+  }
+
+  function renderScenario(title, data) {
+    const ranking = (data.top_diseases || []).map(item =>
+      `<div class="score-row"><span>${escapeHTML(item.disease)}</span><div class="score-track"><div class="score-fill" style="width:${Math.max(0, Math.min(100, Number(item.relative_score) || 0))}%"></div></div><strong>${Number(item.relative_score || 0).toFixed(1)}%</strong></div>`
+    ).join("");
+    const action = data.next_rl_action || {};
+    return `<article class="panel" style="margin:14px 0;">
+      <h3>${escapeHTML(title)}</h3>
+      <p><strong>Leading disease:</strong> ${escapeHTML(data.best_disease)}</p>
+      <p><strong>RL next action:</strong> ${escapeHTML(action.type)} — ${escapeHTML(String(action.target || "").replaceAll("_", " "))}</p>
+      <p class="muted">Known findings: ${escapeHTML(data.known_findings)}. Q-scores are internal RL model scores, not calibrated probabilities or clinical confidence.</p>
+      <h4>Leading disease score comparison</h4><div>${ranking}</div>
+      ${renderExplain(title, data.explanation)}
+    </article>`;
+  }
+
+  async function loadFeatures() {
+    const response = await fetch("/api/whatif/features", {credentials: "same-origin"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const featureMap = new Map(data.features.map(feature => [feature.name, feature]));
+    featureSelect.innerHTML = data.features.map(feature =>
+      `<option value="${escapeHTML(feature.name)}">${escapeHTML(feature.label)} (${escapeHTML(feature.kind)})</option>`
+    ).join("");
+
+    // Start from the actual completed consultation so What-if changes are
+    // a comparison against this patient's original recorded findings.
+    const caseId = window.DIAGNO_CASE_ID;
+    if (caseId) {
+      const caseResponse = await fetch(`/api/manual-cases/${encodeURIComponent(caseId)}`, {credentials:"same-origin"});
+      const caseData = await caseResponse.json();
+      if (!caseResponse.ok) throw new Error(caseData.error || `HTTP ${caseResponse.status}`);
+      Object.entries(caseData.symptoms || {}).forEach(([name, value]) => {
+        if (value !== null && featureMap.has(name)) {
+          const feature = featureMap.get(name);
+          findings.set(name, {label:feature.label, kind:feature.kind, baseline:Number(value), modified:Number(value)});
+        }
+      });
+      Object.entries(caseData.tests || {}).forEach(([name, value]) => {
+        if (value !== null && featureMap.has(name)) {
+          const feature = featureMap.get(name);
+          findings.set(name, {label:feature.label, kind:feature.kind, baseline:Number(value), modified:Number(value)});
+        }
+      });
+      renderFindings();
+      status.textContent = findings.size
+        ? "Original consultation findings loaded. Change the What-if column to simulate a different patient state."
+        : "No findings were recorded. Add the patient's baseline findings, then modify them for comparison.";
+    }
+  }
+
+  document.getElementById("wi-add").addEventListener("click", () => {
+    const name = featureSelect.value;
+    if (!name) return;
+    const option = featureSelect.selectedOptions[0];
+    const match = option.textContent.match(/^(.*) \((symptom|test)\)$/);
+    findings.set(name, {
+      label: match ? match[1] : name,
+      kind: match ? match[2] : "feature",
+      baseline: valueFrom(baseSelect),
+      modified: valueFrom(modSelect)
+    });
+    renderFindings();
   });
 
-  loadBaseline();
+  document.getElementById("wi-run").addEventListener("click", async () => {
+    status.textContent = "Evaluating both states with the trained RL agent and generating explanations…";
+    results.innerHTML = "";
+    const baseline = scenarioObject("baseline");
+    const modified = scenarioObject("modified");
+    if (!Object.keys(baseline).length && !Object.keys(modified).length) {
+      status.textContent = "Add at least one known finding before comparing scenarios.";
+      return;
+    }
+    const button = document.getElementById("wi-run");
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/whatif/evaluate", {
+        method: "POST", credentials: "same-origin",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({baseline, modified})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      results.innerHTML = renderScenario("Original patient state", data.baseline) + renderScenario("Modified what-if state", data.modified);
+      const changed = data.baseline.best_disease !== data.modified.best_disease;
+      status.textContent = changed
+        ? "The leading RL disease prediction changed in this hypothetical scenario."
+        : "The leading RL disease prediction remained the same in this hypothetical scenario.";
+    } catch (error) {
+      status.textContent = "What-if analysis failed: " + error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  document.getElementById("wi-clear").addEventListener("click", () => {
+    findings.clear();
+    results.innerHTML = "";
+    status.textContent = "Scenario cleared. No consultation records were changed.";
+    renderFindings();
+  });
+
+  loadFeatures().catch(error => {
+    status.textContent = "Could not load clinical features: " + error.message;
+  });
 })();

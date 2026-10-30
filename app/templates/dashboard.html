@@ -1,119 +1,36 @@
-
 {% extends "base.html" %}
-
-{% block title %}Dashboard - DiagnoPath AI{% endblock %}
-
+{% block title %}Dashboard · DiagnoPath AI{% endblock %}
 {% block content %}
 <header class="page-head">
   <div>
-    <p class="eyebrow">Welcome back</p>
-    <h1>{{ doctor.full_name }}</h1>
-    <p class="muted">
-      Start a consultation. The disease is unknown until you diagnose.
-    </p>
+    <p class="eyebrow">Clinical decision support</p>
+    <h1>Doctor Dashboard</h1>
+    <p class="muted">Start one RL-guided consultation for a patient. The agent selects the next symptom inquiry, investigation, or diagnosis action.</p>
   </div>
-  <button id="random-case" class="primary" type="button">
-    New random case
-  </button>
 </header>
 
 <section class="stat-grid">
-  <article>
-    <span>Completed cases</span>
-    <strong>{{ stats.completed_cases }}</strong>
-  </article>
-  <article>
-    <span>Agreement with records</span>
-    <strong>{{ stats.accuracy_pct }}%</strong>
-  </article>
-  <article>
-    <span>Avg. investigation cost</span>
-    <strong>{{ stats.avg_cost }}</strong>
-  </article>
-  <article>
-    <span>Diseases in registry</span>
-    <strong>{{ catalog.n_diseases }}</strong>
-  </article>
+  <article><span>Held-out RL evaluation</span><strong>81.0%</strong></article>
+  <article><span>Correct test cases</span><strong>34 / 42</strong></article>
+  <article><span>RL algorithm</span><strong>Linear Q-Learning</strong></article>
+  <article><span>Diseases in model</span><strong>{{ catalog.n_diseases }}</strong></article>
 </section>
+<p class="muted small">Evaluation result from the fixed dataset test split using the warm-start experimental model. This is not a clinical accuracy guarantee.</p>
 
 <section class="panel">
-  <div class="panel-head">
-    <h2>Patient registry</h2>
-    <input
-      id="patient-q"
-      type="search"
-      placeholder="Search patient ID, e.g. P0151"
-    />
+  <p class="eyebrow">Start here</p>
+  <h2>New clinical consultation</h2>
+  <p class="muted">Enter a patient reference (optional). Then the RL agent will guide the consultation step by step using symptoms and investigation findings.</p>
+  <label for="patient-ref">Patient reference / ID</label>
+  <input id="patient-ref" type="text" maxlength="80" placeholder="e.g. Patient-001 (optional)" style="max-width:420px;width:100%;">
+  <div style="margin-top:14px;">
+    <button id="start-consultation" class="primary" type="button">Start RL consultation</button>
   </div>
-
-  <p class="muted">
-    {{ catalog.n_patients }} records -
-    {{ catalog.n_symptoms }} symptoms -
-    {{ catalog.n_investigations }} investigations
-  </p>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Patient</th>
-        <th>Index</th>
-        <th>Split</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody id="patient-rows">
-      <tr>
-        <td colspan="4">Loading registry...</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="pager">
-    <button id="prev-page" type="button">Previous</button>
-    <span id="page-label"></span>
-    <button id="next-page" type="button">Next</button>
-  </div>
+  <p id="start-status" class="muted" aria-live="polite"></p>
 </section>
 
-<section class="panel" id="what-if-analysis">
-  <div class="panel-head">
-    <div>
-      <p class="eyebrow">What-if Analysis</p>
-      <h2>What-if Analysis</h2>
-      <p class="muted">
-        Explore hypothetical consultation cost changes without modifying saved records.
-      </p>
-    </div>
-  </div>
-
-  <div id="whatif-content" aria-live="polite">
-    Loading What-if calculator...
-  </div>
-</section>
-
-<section class="panel" id="consultation-analytics">
-  <div class="panel-head">
-    <div>
-      <p class="eyebrow">Consultation Analytics</p>
-      <h2>Consultation Analytics</h2>
-      <p class="muted">
-        Summary of recorded consultation history.
-      </p>
-    </div>
-
-    <button id="refresh-analytics" class="ghost" type="button">
-      Refresh analytics
-    </button>
-  </div>
-
-  <div id="analytics-content" aria-live="polite">
-    Loading consultation analytics...
-  </div>
-</section>
 {% endblock %}
-
 {% block scripts %}
 <script src="/static/js/dashboard.js"></script>
-<script src="/static/js/analytics.js"></script>
-<script src="/static/js/whatif.js"></script>
+
 {% endblock %}

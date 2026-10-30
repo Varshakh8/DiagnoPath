@@ -135,6 +135,7 @@ def _observation(known: Dict[str, int]) -> Observation:
 
 def _candidate_actions(
     known: Dict[str, int],
+    skipped: set[str],
     allow_questions: bool,
     allow_diagnosis: bool,
 ) -> List[Action]:
@@ -143,7 +144,7 @@ def _candidate_actions(
 
     if allow_questions:
         for name, feature in FEATURES.items():
-            if name in known:
+            if name in known or name in skipped:
                 continue
 
             kind = (
@@ -163,7 +164,7 @@ def _candidate_actions(
     return actions
 
 
-def _suggest(known: Dict[str, int]) -> Dict[str, Any]:
+def _suggest(known: Dict[str, int], skipped: set[str] | None = None) -> Dict[str, Any]:
     """Ask the trained agent what to do next, given what is known."""
 
     agent = rl_service.agent()
@@ -197,8 +198,10 @@ def _suggest(known: Dict[str, int]) -> Dict[str, Any]:
 
     forced = n_known >= MAX_FINDINGS_BEFORE_FORCED_DIAGNOSIS
 
+    skipped = skipped or set()
     actions = _candidate_actions(
         known,
+        skipped,
         allow_questions=not forced,
         allow_diagnosis=(
             n_known >= MIN_FINDINGS_BEFORE_DIAGNOSIS
@@ -208,6 +211,7 @@ def _suggest(known: Dict[str, int]) -> Dict[str, Any]:
     if not actions:
         actions = _candidate_actions(
             known,
+            skipped,
             allow_questions=False,
             allow_diagnosis=True,
         )
@@ -252,6 +256,7 @@ def _payload(
     data: Dict[str, Any] = {
         "session_id": session_id,
         "n_findings": len(known),
+        "n_skipped_tests": len(rec.get("skipped", [])),
         "findings": [
             {
                 "name": name,
@@ -261,7 +266,7 @@ def _payload(
             }
             for name, value in known.items()
         ],
-        "suggestion": _suggest(known),
+        "suggestion": _suggest(known, set(rec.get("skipped", []))),
     }
 
     if include_features:
@@ -276,6 +281,7 @@ def start_session(doctor_id: int) -> Dict[str, Any]:
     rec = {
         "doctor_id": doctor_id,
         "known": {},
+        "skipped": [],
     }
 
     _sessions[session_id] = rec
@@ -311,6 +317,16 @@ def record_answer(
     else:
         rec["known"][target] = 1 if present else 0
 
+    return _payload(session_id, rec)
+
+
+def skip_test(session_id: str, doctor_id: int, target: str) -> Dict[str, Any]:
+    rec = _require(session_id, doctor_id)
+    if target not in META.investigation_features:
+        raise ValueError("Only a recommended investigation can be skipped")
+    rec["known"].pop(target, None)
+    if target not in rec.setdefault("skipped", []):
+        rec["skipped"].append(target)
     return _payload(session_id, rec)
 
 
@@ -434,3 +450,37 @@ async def api_live_answer(request: Request, session_id: str):
             present,
         ),
     )
+
+
+@router.post("/api/live/{session_id}/skip")
+async def api_live_skip(request: Request, session_id: str):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    target = str(body.get("target", ""))
+    return _run(request, lambda doctor_id: skip_test(session_id, doctor_id, target))
+
+
+@router.get("/api/live/{session_id}/explain")
+def api_live_explain(request: Request, session_id: str):
+    doctor = _current_doctor(request)
+    if not doctor:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        rec = _require(session_id, doctor["id"])
+        known = rec["known"]
+        state = encode_state_for_rl(_observation(known))
+        model = rl_service.agent()
+        ranked = sorted(
+            META.diseases,
+            key=lambda d: model.get_q(state, Action(ActionType.DIAGNOSE, d)),
+            reverse=True,
+        )
+        chosen = Action(ActionType.DIAGNOSE, ranked[0])
+        from . import xai_service
+        return xai_service.explain_findings(known, chosen)
+    except KeyError:
+        return JSONResponse({"error": "live session not found"}, status_code=404)
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)

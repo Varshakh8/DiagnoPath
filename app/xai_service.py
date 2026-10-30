@@ -233,6 +233,21 @@ def explain_manual_case(case: Dict[str, Any]) -> Dict[str, Any]:
     return _contribution_payload(observation, chosen)
 
 
+def explain_findings(known: Dict[str, int], chosen: Action) -> Dict[str, Any]:
+    """Explain an action for a caller-supplied live/hypothetical RL state."""
+    observation = Observation(
+        patient_id="LIVE_OR_HYPOTHETICAL",
+        known_symptoms={s: known.get(s) for s in META.inquiry_symptoms},
+        known_tests={t: known.get(t) for t in META.investigation_features},
+        step=len(known),
+        done=chosen.type == ActionType.DIAGNOSE,
+        last_reward=0.0,
+        message="Doctor-entered or hypothetical findings",
+        disease_options=list(META.diseases),
+    )
+    return _contribution_payload(observation, chosen)
+
+
 def explain_action(case_id: str, doctor_id: int) -> Dict[str, Any]:
     """Explain the selected RL action for an existing live consultation."""
 

@@ -6,6 +6,7 @@
     <p class="eyebrow">Live consultation · real patient</p>
     <h1>Live patient interview</h1>
     <p class="muted">No stored record is used. Answer the AI's questions for the patient in front of you, and it decides what to ask next.</p>
+    <p class="muted">For an investigation, perform the test outside the system and enter its actual positive/negative result, or explicitly skip it. This is experimental decision support, not a confirmed medical diagnosis.</p>
   </div>
   <a class="ghost" href="/app">Back to dashboard</a>
 </header>
@@ -16,6 +17,7 @@
     <button id="start-btn" class="ghost" type="button">▶ Start new live consultation</button>
     <p id="status" class="muted"></p>
     <div id="ai-box" style="margin: 12px 0;"></div>
+    <div id="xai-box" style="margin-top:16px;"></div>
 
     <div id="add-box" style="display:none; margin-top:16px;">
       <h2>Add a finding yourself</h2>
@@ -137,18 +139,19 @@
     box.textContent = "";
 
     if (s.type === "diagnose") {
-      box.appendChild(el("p", "tag yes", "AI recommends diagnosing: " + s.label));
+      box.appendChild(el("p", "tag yes", "RL leading prediction: " + s.label));
       if (s.forced) {
         box.appendChild(el("p", "muted",
           "The AI asked many questions without reaching a confident decision, so this is its best guess."));
       }
       box.appendChild(el("p", "muted",
         "You can still add, flip or remove findings, and the recommendation will update."));
+      explain();
       return;
     }
 
     const text = s.type === "test"
-      ? "Is this present / positive: " + s.label + "?"
+      ? "The RL agent recommends this investigation: " + s.label + ". Perform the test and record its actual result."
       : "Does the patient have: " + s.label + "?";
 
     const q = el("p", null, text);
@@ -156,17 +159,59 @@
     q.style.fontWeight = "600";
     box.appendChild(q);
 
-    const yes = el("button", null, "Yes");
+    const yes = el("button", null, s.type === "test" ? "Record positive result" : "Yes, present");
     yes.type = "button";
     yes.addEventListener("click", function () { answer(s.target, true); });
 
-    const no = el("button", null, "No");
+    const no = el("button", null, s.type === "test" ? "Record negative result" : "No, absent");
     no.type = "button";
     no.addEventListener("click", function () { answer(s.target, false); });
 
     box.appendChild(yes);
     box.appendChild(document.createTextNode(" "));
     box.appendChild(no);
+    if (s.type === "test") {
+      const skip = el("button", "ghost", "Skip this test");
+      skip.type = "button";
+      skip.addEventListener("click", function () { skipTest(s.target); });
+      box.appendChild(document.createTextNode(" "));
+      box.appendChild(skip);
+    }
+  }
+
+  async function skipTest(target) {
+    if (!sid) return;
+    setStatus("Recording that the test was not performed…");
+    try {
+      const data = await api("POST", "/api/live/" + encodeURIComponent(sid) + "/skip", {target: target});
+      render(data);
+      setStatus("Test skipped; no result was added to the patient state.");
+    } catch (e) { setStatus("Error: " + e.message); }
+  }
+
+  async function explain() {
+    const box = $("xai-box");
+    box.textContent = "Generating SHAP and LIME explanations…";
+    try {
+      const data = await api("GET", "/api/live/" + encodeURIComponent(sid) + "/explain");
+      box.textContent = "";
+      box.appendChild(el("h3", null, "Why this prediction?"));
+      box.appendChild(el("p", "muted", "Explanation of the RL model's selected disease score; contributions are not probabilities or medical causation."));
+      ["shap", "lime"].forEach(function (method) {
+        const item = data[method];
+        box.appendChild(el("h4", null, method.toUpperCase()));
+        if (!item || item.status !== "ok") {
+          box.appendChild(el("p", "muted", item ? item.message : "Explanation unavailable."));
+          return;
+        }
+        const features = item.features || [];
+        features.slice(0, 8).forEach(function (f) {
+          const label = f.feature || f.description || "Feature";
+          const value = f.contribution !== undefined ? f.contribution : f.weight;
+          box.appendChild(el("p", "muted", label + ": " + Number(value).toFixed(4)));
+        });
+      });
+    } catch (e) { box.textContent = "XAI unavailable: " + e.message; }
   }
 
   function render(data) {
@@ -181,6 +226,7 @@
     try {
       const data = await api("POST", "/api/live/start");
       sid = data.session_id;
+      $("xai-box").textContent = "";
       fillSelect(data.features);
       window.history.replaceState(null, "", "/app/live?session=" + encodeURIComponent(sid));
       render(data);

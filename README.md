@@ -1,77 +1,61 @@
-# DiagnoPath AI - Member 1: Clinical Environment + Doctor App
+# DiagnoPath AI — RL Clinical Decision Support
 
-You own the **foundation** and the **usable clinic application**:
+DiagnoPath models a clinical consultation as a sequence of decisions using a custom Linear Q-Learning agent. The doctor enters patient findings; the agent selects whether to ask about a symptom, recommend an investigation, or produce a final prediction.
 
-1. Multi-disease Kaggle dataset
-2. Sequential diagnostic environment (`reset` / `step` / rewards)
-3. Doctor login, backend APIs, and clinical frontend
-4. Hooks so Members 2–4 can continue (RL, XAI, richer dashboard)
+## Run the application (Windows / PowerShell)
 
-No built-in ML algorithms.
+From the extracted `DiagnoPath` project folder:
 
----
-
-## Run the doctor application
-
-```bash
-cd "Module1"
-pip install -r requirements.txt
+```powershell
+python -m pip install -r requirements.txt
 python run_app.py
 ```
 
-Open http://127.0.0.1:8000
+Open `http://127.0.0.1:8000`.
 
-**Demo login**
+Demo login:
+- Username: `doctor`
+- Password: `clinic123`
 
-| Username | Password |
-|----------|----------|
-| `doctor` | `clinic123` |
-| `dr.mehta` | `clinic123` |
+A second demo account is also available:
+- Username: `dr.mehta`
+- Password: `clinic123`
 
-Workflow: sign in → open a patient case → ask symptoms → order tests → diagnose. The disease is hidden until you submit a diagnosis.
+## Single consultation workflow
 
----
+1. Sign in and choose **Start RL consultation** on the dashboard.
+2. Enter an optional patient reference.
+3. The RL agent chooses the next symptom question or investigation recommendation.
+4. Record the actual symptom answer or investigation result. A test may be explicitly skipped; it is never treated as negative when skipped.
+5. The agent updates its observation and chooses the next action or final prediction.
+6. SHAP and LIME explanations are generated for the final diagnosis where the packages are available. Feature contribution charts are shown in the consultation.
+7. After the final prediction, use **What-if Analysis** to compare the original patient state with a modified hypothetical state. It uses the same RL model and does not alter the saved consultation.
 
-## Dataset (Kaggle)
+The dataset is retained for model training and evaluation. The old dataset-random consultation and separate live consultation are not exposed as separate user workflows.
 
-https://www.kaggle.com/datasets/kaushil268/disease-prediction-using-machine-learning
+## RL model and evaluation
 
-| Item | Count |
-|------|------:|
-| Patients | 4962 |
-| Symptoms | 132 |
-| Diseases | 41 |
+The application loads:
+`models/diagnostic_linear_q_warmstart_experiment.json`
 
-Ask symptom cost = 1. Investigation cost = 3.
-
----
-
-## What others plug in
-
-| Member | Work | Integration point |
-|--------|------|-------------------|
-| **You (1)** | Data, environment, login, sequential diagnosis UI | Done |
-| **2** | Custom RL agent | `GET /api/rl/suggest` and `encode_state_for_rl()` |
-| **3** | Custom XAI | `GET /api/xai/explain` |
-| **4** | Extra charts / what-if dashboard | Reuse `/api/cases` JSON |
-
-### REST API (cookie session after login)
-
-- `POST /login` — doctor authentication
-- `GET /api/patients` — registry (disease hidden)
-- `POST /api/cases` — start consultation (`{"patient_index": 150}` or `{}` for random)
-- `POST /api/cases/{id}/actions` — `{"type":"ask"|"test"|"diagnose","target":"..."}`
-- `GET /api/history` — completed cases for the logged-in doctor
-
----
-
-## Folder structure
-
+The included evaluation script is:
+```powershell
+python -m rl.evaluate_experiment
 ```
-member1_clinical_env/
-  app/                 # backend + frontend
-  env/                 # diagnostic environment (Member 2 trains on this)
-  data/patients.csv
-  demo/meeting_demo.py
-  run_app.py
-```
+
+On the repository's fixed held-out split, the experimental model achieved 34 correct diagnoses out of 42 test cases (81.0%). This is a dataset evaluation result, not clinical validation or a guarantee of accuracy on new patients.
+
+## Clinical feature representation
+
+The existing trained RL model accepts categorical findings:
+- `Unknown` = -1
+- `Absent / Negative` = 0
+- `Present / Positive` = 1
+
+The current model vocabulary does not define numeric laboratory thresholds. Do not enter or interpret raw numeric laboratory values as if this model already understands them. Numeric lab integration requires documented thresholds and compatible preprocessing/model training.
+
+## Explainability and limitations
+
+SHAP and LIME explain feature contributions to the selected RL action's Q-score. Contributions are not causal medical claims, and the normalized relative disease scores displayed by the interface are not calibrated probabilities. The application is an academic decision-support prototype and must not be used as a substitute for professional clinical judgement.
+
+See `IMPLEMENTATION_NOTES.md` for integration details and validation notes.

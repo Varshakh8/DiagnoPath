@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}RL Clinical Consultation · DiagnoPath AI{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Single sequential RL workflow</p>
+    <h1>Clinical Consultation</h1>
+    <p class="muted">Patient reference: <strong>{{ patient_ref }}</strong></p>
+    <p class="muted">The trained RL agent selects the next symptom inquiry, investigation recommendation, or final prediction. Enter only findings actually reported or measured.</p>
+  </div>
+  <a class="ghost" href="/app">Dashboard</a>
+</header>
+
+<div class="consult-grid">
+  <section class="stack">
+    <article class="panel">
+      <div class="panel-head"><h2>RL diagnostic process</h2><span id="step-count" class="tag">Starting…</span></div>
+      <p id="consult-status" class="muted" aria-live="polite">Loading the next RL action…</p>
+      <div id="action-card" aria-live="polite"></div>
+      <div id="prediction-card"></div>
+    </article>
+
+    <article class="panel">
+      <h2>Already-known patient findings</h2>
+      <p class="muted">If the doctor already has a verified symptom or investigation result, it can be entered here. The value is added to the same RL state.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;">
+        <label style="flex:2;min-width:220px;">Finding<select id="known-feature" style="width:100%;"></select></label>
+        <label style="flex:1;min-width:150px;">Result<select id="known-value" style="width:100%;"><option value="1">Present / Positive</option><option value="0">Absent / Negative</option></select></label>
+        <button id="add-known" type="button">Add finding</button>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h2>Explainable AI — Why this prediction?</h2>
+      <p class="muted">SHAP and LIME feature contributions for the final RL-selected disease action. Contribution values explain model scores; they are not causal medical claims or calibrated probabilities.</p>
+      <div id="xai-visuals"><p class="muted">Explanations will appear after the final prediction.</p></div>
+    </article>
+  </section>
+
+  <aside class="stack">
+    <article class="panel">
+      <h2>Leading disease scores</h2>
+      <div id="disease-ranking"><p class="muted">Scores update as findings are entered.</p></div>
+      <p class="muted small">Relative score percentages are normalized comparisons of Q-scores, not calibrated disease probabilities or clinical confidence.</p>
+    </article>
+    <article class="panel">
+      <h2>Patient findings</h2>
+      <div id="finding-list"><p class="muted">No findings recorded yet.</p></div>
+    </article>
+    <article class="panel">
+      <h2>Sequential diagnostic actions</h2>
+      <ol id="clinical-timeline" class="timeline"><li>Consultation started.</li></ol>
+    </article>
+  </aside>
+</div>
+
+<section class="panel" id="whatif-panel" hidden style="margin-top:22px;">
+  <p class="eyebrow">After the original prediction</p>
+  <h2>What-if Analysis</h2>
+  <p class="muted">Change the patient's known symptoms or investigation findings and compare the original and modified states using the same trained RL agent. This simulation does not alter the saved consultation.</p>
+  <div id="whatif-content" aria-live="polite">Loading What-if analysis…</div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>window.DIAGNO_CASE_ID = {{ case_id | tojson }};</script>
+<script src="/static/js/clinical_consult.js"></script>
+<script src="/static/js/whatif.js"></script>
+{% endblock %}
