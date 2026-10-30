@@ -223,111 +223,337 @@ async function act(type, target) {
 
 
 async function explainRecommendation() {
-  if (!xaiButton || !xaiResult) {
-    console.error("XAI button or result panel was not found.");
-    return;
-  }
-
-  // XAI must use the active manual RL consultation ID.
+  console.log("NEW XAI FUNCTION IS RUNNING!");
   const activeCaseId =
     manualCaseId ||
     localStorage.getItem("diagnopath_manual_case_id");
 
   if (!activeCaseId) {
-    xaiResult.textContent =
-      "Start an AI consultation before requesting an explanation.";
+    alert("Please start an AI consultation first.");
+    return;
+  }
+
+  // Open the new tab immediately after the button click.
+  const explanationWindow = window.open("", "_blank");
+
+  if (!explanationWindow) {
+    alert("Please allow pop-ups for this site and try again.");
     return;
   }
 
   xaiButton.disabled = true;
   xaiButton.textContent = "Loading explanation...";
-  xaiResult.textContent = "Getting explanation from the RL agent...";
+
+  explanationWindow.document.open();
+  explanationWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>DiagnoPath AI - XAI Explanation</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          max-width: 950px;
+          margin: 30px auto;
+          padding: 20px;
+          background: #f3f6fb;
+          color: #243047;
+          line-height: 1.6;
+        }
+        h1, h2 { color: #1756a9; }
+        section {
+          background: white;
+          padding: 22px;
+          margin: 20px 0;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px #0001;
+        }
+        li { margin: 8px 0; overflow-wrap: anywhere; }
+        .muted { color: #64748b; }
+        .error { color: #b91c1c; }
+        .score { font-weight: bold; }
+        button {
+          padding: 10px 16px;
+          border: 0;
+          border-radius: 7px;
+          background: #1756a9;
+          color: white;
+          cursor: pointer;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>DiagnoPath AI — Explainable AI</h1>
+      <p>Explanation of the selected Reinforcement Learning action.</p>
+      <div id="content">Loading RL, SHAP and LIME explanations...</div>
+    </body>
+    </html>
+  `);
+  explanationWindow.document.close();
 
   try {
-    const activeCaseId =
-  manualCaseId ||
-  localStorage.getItem("diagnopath_manual_case_id");
+    const response = await fetch(
+      `/api/xai/explain?case_id=${encodeURIComponent(activeCaseId)}`
+    );
 
-if (!activeCaseId) {
-  throw new Error("Please start an AI consultation first.");
-}
+    const data = await response.json();
 
-const res = await fetch(
-  `/api/xai/explain?case_id=${encodeURIComponent(activeCaseId)}`
-);
-
-    const data = await res.json();
-
-    if (!res.ok || data.status !== "ok") {
+    if (!response.ok || data.status !== "ok") {
       throw new Error(
-        data.detail ||
-        data.message ||
-        data.error ||
-        `Could not get explanation (HTTP ${res.status}).`
+        data.detail || data.message || "Failed to load explanation."
       );
     }
 
-    xaiResult.replaceChildren();
+    if (explanationWindow.closed) return;
 
-    const action = document.createElement("p");
-    action.textContent =
-      `Recommended action: ${data.action.type} — ${data.action.label}`;
-    xaiResult.appendChild(action);
+    const doc = explanationWindow.document;
+    const content = doc.getElementById("content");
+    content.replaceChildren();
 
-    const score = document.createElement("p");
-    score.textContent = `Q-score: ${data.q_score}`;
-    xaiResult.appendChild(score);
+    function addText(tag, text, parent = content, className = "") {
+      const element = doc.createElement(tag);
+      element.textContent = String(text ?? "");
+      if (className) element.className = className;
+      parent.appendChild(element);
+      return element;
+    }
 
-    function addContributions(headingText, items) {
-      const heading = document.createElement("h4");
-      heading.textContent = headingText;
-      xaiResult.appendChild(heading);
+    function addSection(heading) {
+      const section = doc.createElement("section");
+      content.appendChild(section);
+      addText("h2", heading, section);
+      return section;
+    }
 
-      if (!Array.isArray(items) || items.length === 0) {
-        const empty = document.createElement("p");
-        empty.textContent =
-          "No non-zero known-feature contributions were found.";
-        xaiResult.appendChild(empty);
+    function renderFeatures(parent, features, method) {
+      if (!Array.isArray(features) || features.length === 0) {
+        addText("p", "No feature contributions available.", parent);
         return;
       }
 
-      const list = document.createElement("ul");
+      const list = doc.createElement("ul");
 
-      items.forEach((item) => {
-        const li = document.createElement("li");
-        li.textContent =
-          `${item.feature} (${item.finding}): ${item.contribution}`;
-        list.appendChild(li);
+      features.forEach((feature) => {
+        let description;
+
+        if (method === "SHAP") {
+          description =
+            `${feature.feature} (${feature.finding}): ` +
+            `${feature.contribution}`;
+        } else if (method === "LIME") {
+          description =
+            `${feature.description}: ${feature.weight}`;
+        } else {
+          description =
+            `${feature.feature} (${feature.finding}): ` +
+            `${feature.contribution}`;
+        }
+
+        addText("li", description, list);
       });
 
-      xaiResult.appendChild(list);
+      parent.appendChild(list);
     }
 
-    addContributions(
-      "Top positive contributions",
-      data.top_positive_contributions
+    // 1. RL feature contributions
+    const rlSection = addSection("1. Custom RL Feature Contributions");
+    
+    // Generate a human-readable explanation of the recommendation.
+    const paragraphSection = addSection(
+      "Why was this recommendation made?"
     );
 
-    addContributions(
-      "Top negative contributions",
-      data.top_negative_contributions
+    const positiveFeatures = (
+      data.top_positive_contributions || []
+    ).slice(0, 3);
+
+    const shapPositive = (
+      data.shap?.features || []
+    )
+      .filter((feature) => Number(feature.contribution) > 0)
+      .slice(0, 3);
+
+    const limePositive = (
+      data.lime?.features || []
+    )
+      .filter((feature) => Number(feature.weight) > 0)
+      .slice(0, 3);
+
+    const featureNames = positiveFeatures
+      .map((feature) => feature.feature)
+      .filter(Boolean);
+
+    const actionLabel = data.action?.label || data.action?.target || "the selected action";
+
+    let explanation;
+
+    if (data.action?.type === "diagnose") {
+      if (featureNames.length > 0) {
+        explanation =
+          `The RL agent recommended ${actionLabel} because its learned ` +
+          `model assigned this diagnostic action a Q-score of ${data.q_score}. ` +
+          `The custom feature-contribution analysis identified ` +
+          `${featureNames.join(", ")} as positive contributors to the ` +
+          `selected action's score. `;
+      } else {
+        explanation =
+          `The RL agent recommended ${actionLabel} with a Q-score of ` +
+          `${data.q_score}. The custom feature-contribution analysis did ` +
+          `not identify any positive known-feature contributions in its ` +
+          `reported results. The recommendation therefore needs to be ` +
+          `interpreted using the model's learned parameters and the ` +
+          `complete consultation state. `;
+      }
+    } else {
+      explanation =
+        `The RL agent selected the action "${actionLabel}" with a Q-score ` +
+        `of ${data.q_score}. This score reflects the agent's learned ` +
+        `assessment of that action for the current consultation state. `;
+
+      if (featureNames.length > 0) {
+        explanation +=
+          `The strongest positive custom contributions reported were ` +
+          `${featureNames.join(", ")}. `;
+      }
+    }
+
+    if (shapPositive.length > 0) {
+      explanation +=
+        `SHAP also identified positive contributions from ` +
+        `${shapPositive.map((feature) => feature.feature).join(", ")}. `;
+    }
+
+    if (limePositive.length > 0) {
+      explanation +=
+        `LIME's local approximation assigned positive weights to ` +
+        `${limePositive.map((feature) => feature.description).join(", ")}. `;
+    }
+
+    explanation +=
+      "These methods explain aspects of the model's selected-action score; " +
+      "they do not establish that the disease is present or prove causation. " +
+      "The recommendation is experimental and requires clinical assessment.";
+
+    addText("p", explanation, paragraphSection);
+
+
+    addText(
+      "p",
+      `Recommended action: ${data.action.type} — ${data.action.label}`,
+      rlSection
     );
 
-    const note = document.createElement("p");
-    note.className = "muted";
-    note.textContent = data.note || 
-      "These are model-score contributions, not disease probabilities.";
-    xaiResult.appendChild(note);
+    addText("p", `Q-score: ${data.q_score}`, rlSection, "score");
+
+    addText("h3", "Top positive contributions", rlSection);
+    renderFeatures(
+      rlSection,
+      data.top_positive_contributions,
+      "RL"
+    );
+
+    addText("h3", "Top negative contributions", rlSection);
+    renderFeatures(
+      rlSection,
+      data.top_negative_contributions,
+      "RL"
+    );
+
+    if (data.note) {
+      addText("p", data.note, rlSection, "muted");
+    }
+
+    // 2. SHAP explanation
+    const shapSection = addSection("2. SHAP Explanation");
+    const shap = data.shap;
+
+    if (!shap || shap.status !== "ok") {
+      addText(
+        "p",
+        shap?.message || "SHAP explanation is unavailable.",
+        shapSection,
+        "error"
+      );
+    } else {
+      addText(
+        "p",
+        `Explained quantity: ${shap.explained_quantity || "selected action Q-score"}`,
+        shapSection
+      );
+      addText("p", `Base value: ${shap.base_value}`, shapSection);
+      renderFeatures(shapSection, shap.features, "SHAP");
+
+      if (shap.note) {
+        addText("p", shap.note, shapSection, "muted");
+      }
+    }
+
+    // 3. LIME explanation
+    const limeSection = addSection("3. LIME Explanation");
+    const lime = data.lime;
+
+    if (!lime || lime.status !== "ok") {
+      addText(
+        "p",
+        lime?.message || "LIME explanation is unavailable.",
+        limeSection,
+        "error"
+      );
+    } else {
+      addText(
+        "p",
+        `Explained quantity: ${lime.explained_quantity || "selected action Q-score"}`,
+        limeSection
+      );
+
+      addText(
+        "p",
+        `Local surrogate R²: ${lime.local_surrogate_r2}`,
+        limeSection
+      );
+
+      renderFeatures(limeSection, lime.features, "LIME");
+
+      if (lime.note) {
+        addText("p", lime.note, limeSection, "muted");
+      }
+    }
+
+    addText(
+      "p",
+      "These explanations describe model scores, not disease probabilities or medical causation.",
+      content,
+      "muted"
+    );
+
+    const closeButton = doc.createElement("button");
+    closeButton.textContent = "Close explanation";
+    closeButton.addEventListener("click", () => {
+      explanationWindow.close();
+    });
+    content.appendChild(closeButton);
 
   } catch (error) {
     console.error("XAI explanation failed:", error);
-    xaiResult.textContent = error.message ||
-      "Failed to load the explanation.";
+
+    if (!explanationWindow.closed) {
+      const content = explanationWindow.document.getElementById("content");
+      if (content) {
+        content.replaceChildren();
+        const message = explanationWindow.document.createElement("p");
+        message.className = "error";
+        message.textContent = error.message || "Failed to load explanation.";
+        content.appendChild(message);
+      }
+    }
   } finally {
     xaiButton.disabled = false;
     xaiButton.textContent = "Explain Recommendation";
   }
 }
+
 
 xaiButton.addEventListener("click", explainRecommendation);
 
