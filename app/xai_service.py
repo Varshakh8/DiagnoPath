@@ -7,6 +7,7 @@ using learned feature contributions for manual and live cases.
 
 from __future__ import annotations
 
+from .xai_methods import explain_with_shap_and_lime
 from typing import Any, Dict, Optional
 
 from env.diagnostic_env import (
@@ -135,7 +136,9 @@ def _contribution_payload(
         key=lambda item: item["contribution"],
         reverse=True,
     )[:5]
+
     print("XAI known features:", contributions)
+
     negative = sorted(
         [
             item for item in contributions
@@ -152,7 +155,8 @@ def _contribution_payload(
         else _humanize(chosen.target)
     )
 
-    return {
+    # Existing custom linear Q-learning explanation.
+    result = {
         "status": "ok",
         "explanation_type": "linear_q_feature_contributions",
         "action": {
@@ -170,6 +174,13 @@ def _contribution_payload(
             "probabilities or causal medical claims."
         ),
     }
+
+    # Add SHAP and LIME explanations without removing the existing result.
+    result.update(
+        explain_with_shap_and_lime(state, chosen)
+    )
+
+    return result
 
 
 def explain_manual_case(case: Dict[str, Any]) -> Dict[str, Any]:
