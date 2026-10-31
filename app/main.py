@@ -248,16 +248,60 @@ def history_page(request: Request):
     if not doctor:
         return RedirectResponse("/login", status_code=302)
 
+    # Existing dataset-based consultation history
+    cases = list(db.list_cases(doctor["id"]))
+
+    # Retrieve completed manual RL consultations
+    with manual_db_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT payload, created_at, updated_at
+            FROM manual_cases
+            WHERE doctor_id = ?
+            """,
+            (doctor["id"],),
+        ).fetchall()
+
+    for row in rows:
+        manual_case = json.loads(row["payload"])
+        if not manual_case.get("done"):
+            continue
+
+        performed_investigations = sum(
+        value is not None
+        for value in manual_case.get("tests", {}).values()
+    )
+
+        investigation_cost = (
+        performed_investigations * META.investigation_cost
+    )
+
+        cases.append({
+        "patient_id": manual_case.get("patient_ref")
+            or manual_case.get("patient_id", "—"),
+        "diagnosis": manual_case.get("prediction"),
+        "true_label": None,
+        "correct": None,
+        "steps": manual_case.get("step", 0),
+        "total_cost": investigation_cost,
+        "finished_at": row["updated_at"],
+    })
+
+    # Display newest consultations first
+    cases.sort(
+        key=lambda c: str(c.get("finished_at") or ""),
+        reverse=True,
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="history.html",
         context={
             "request": request,
             "doctor": doctor,
-            "cases": db.list_cases(doctor["id"]),
+            "cases": cases,
         },
     )
-
 
 # =========================================================
 # EXISTING JSON APIs

@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import random
 
@@ -10,7 +9,9 @@ from env.diagnostic_env import (
 from rl.agent import LinearQLearningAgent
 
 
-MODEL_PATH = Path("models/diagnostic_linear_q.json")
+# Updated RL model (81% baseline accuracy)
+MODEL_PATH = Path("models/diagnostic_linear_q_warmstart_experiment.json")
+
 SEED = 42
 MAX_STEPS = 30
 
@@ -101,7 +102,8 @@ def evaluate(hidden_symptom=None):
 
 
 if __name__ == "__main__":
-    # Show valid symptom names to avoid spelling mistakes.
+    print(f"\nEvaluation model: {MODEL_PATH}")
+
     temp_env = DiagnosticEnvironment()
 
     print("\nAvailable symptoms:")
@@ -112,22 +114,25 @@ if __name__ == "__main__":
         "\nEnter the exact symptom to make unavailable: "
     ).strip()
 
-    print("\nRunning baseline evaluation...")
+    print("\nRunning updated model baseline evaluation...")
     baseline = evaluate()
 
     print(f"\nMaking symptom unavailable: {hidden_symptom}")
     missing = evaluate(hidden_symptom)
 
     print("\n" + "=" * 55)
-    print("MISSING-SYMPTOM ROBUSTNESS RESULTS")
+    print("UPDATED MODEL - MISSING-SYMPTOM ROBUSTNESS RESULTS")
     print("=" * 55)
 
+    print(f"Model: {MODEL_PATH}")
     print(f"Test patients: {baseline['total']}")
+
     print(
         f"Baseline accuracy: "
         f"{baseline['accuracy'] * 100:.1f}% "
         f"({baseline['correct']}/{baseline['total']})"
     )
+
     print(
         f"Baseline diagnosed: "
         f"{baseline['diagnosed']}/{baseline['total']}"
@@ -138,6 +143,7 @@ if __name__ == "__main__":
         f"{missing['accuracy'] * 100:.1f}% "
         f"({missing['correct']}/{missing['total']})"
     )
+
     print(
         f"Diagnosed with symptom unavailable: "
         f"{missing['diagnosed']}/{missing['total']}"
