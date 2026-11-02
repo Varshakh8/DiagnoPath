@@ -4,7 +4,7 @@
 <header class="page-head">
   <div>
     <p class="eyebrow">Clinical decision support</p>
-    <h1>Doctor Dashboard</h1>
+     <h1>Welcome, {{ doctor.full_name }}</h1>
     <p class="muted">Start one RL-guided consultation for a patient. The agent selects the next symptom inquiry, investigation, or diagnosis action.</p>
   </div>
 </header>
@@ -16,6 +16,30 @@
   <article><span>Diseases in model</span><strong>{{ catalog.n_diseases }}</strong></article>
 </section>
 <p class="muted small">Evaluation result from the fixed dataset test split using the warm-start experimental model. This is not a clinical accuracy guarantee.</p>
+
+<section class="stat-grid">
+  <article>
+    <span>Your completed consultations</span>
+    <strong>{{ stats.completed_cases }}</strong>
+  </article>
+  <article>
+    <span>Your correct diagnoses</span>
+    <strong>{{ stats.correct_cases }}</strong>
+  </article>
+  <article>
+    <span>Your recorded accuracy</span>
+    <strong>{{ stats.accuracy_pct }}%</strong>
+  </article>
+  <article>
+    <span>Diseases in model</span>
+    <strong>{{ catalog.n_diseases }}</strong>
+  </article>
+</section>
+
+<p class="muted small">
+  Personal statistics are calculated from completed consultations saved
+  for your account. Accuracy is based on recorded completed cases.
+</p>
 
 <section class="panel">
   <p class="eyebrow">Start here</p>

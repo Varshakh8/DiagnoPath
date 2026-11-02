@@ -1,0 +1,74 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Create Account | DiagnoPath AI</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="login-body">
+    <main class="login-layout">
+        <section class="login-hero">
+            <p class="eyebrow">Hospital clinical workstation</p>
+            <h1>Join DiagnoPath AI</h1>
+            <p>
+                Create your doctor account to access the clinical workstation
+                and explore sequential diagnosis with explainable AI support.
+            </p>
+            <ul>
+                <li>Secure password storage</li>
+                <li>Cost-aware investigations</li>
+                <li>RL recommendations with SHAP and LIME explanations</li>
+            </ul>
+        </section>
+
+        <section class="login-card">
+            <h2>Create your account</h2>
+            <p class="muted">Enter your details to get started.</p>
+
+            {% if error %}
+            <div class="alert">{{ error }}</div>
+            {% endif %}
+
+            <form method="post" action="/register">
+                <label>Full name
+                    <input name="full_name" autocomplete="name"
+                           required maxlength="100">
+                </label>
+
+                <label>Username
+                    <input name="username" autocomplete="username"
+                           required minlength="3" maxlength="50">
+                </label>
+
+                <label>Specialty
+                    <input name="specialty" value="General Medicine"
+                           maxlength="100">
+                </label>
+
+                <label>Password
+                    <input name="password" type="password"
+                           autocomplete="new-password"
+                           required minlength="8">
+                </label>
+
+                <label>Confirm password
+                    <input name="confirm_password" type="password"
+                           autocomplete="new-password" required minlength="8">
+                </label>
+
+                <button type="submit">Create account</button>
+            </form>
+
+            <p class="hint">
+                Already have an account?
+                <a href="/login">Sign in</a>
+            </p>
+            <p class="hint">
+                <a href="/">Back to home</a>
+            </p>
+        </section>
+    </main>
+</body>
+</html>

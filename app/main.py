@@ -21,6 +21,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.templating import Jinja2Templates
 
+import os
+import re
+import urllib.request
+import urllib.error
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 if str(ROOT) not in sys.path:
@@ -49,6 +55,67 @@ app = FastAPI(
     version="1.1.0",
 )
 
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="register.html",
+        context={"request": request, "error": None},
+    )
+
+
+
+@app.post("/register", response_class=HTMLResponse)
+def register_submit(
+    request: Request,
+    full_name: str = Form(...),
+    username: str = Form(...),
+    specialty: str = Form("General Medicine"),
+    password: str = Form(...),
+    confirm_password: str = Form(...),
+):
+    full_name = full_name.strip()
+    username = username.strip()
+
+    error = None
+
+    if not full_name or not username or not password:
+        error = "Please fill in all required fields."
+    elif len(username) < 3:
+        error = "Username must contain at least 3 characters."
+    elif len(password) < 8:
+        error = "Password must contain at least 8 characters."
+    elif password != confirm_password:
+        error = "Passwords do not match."
+
+    if error:
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={"request": request, "error": error},
+            status_code=400,
+        )
+
+    success, message = db.register_doctor(
+        username=username,
+        full_name=full_name,
+        specialty=specialty,
+        password=password,
+    )
+
+    if not success:
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={"request": request, "error": message},
+            status_code=400,
+        )
+
+    return RedirectResponse(
+        url="/login?registered=1",
+        status_code=303,
+    )
+
 app.add_middleware(
     SessionMiddleware,
     secret_key="diagnopath-member1-change-in-production",
@@ -62,6 +129,125 @@ app.mount(
     name="static",
 )
 
+
+@app.post("/api/contact")
+def submit_contact(
+    name: str = Form(...),
+    email: str = Form(...),
+    subject: str = Form(...),
+    message: str = Form(...),
+):
+    name = name.strip()
+    email = email.strip()
+    subject = subject.strip()
+    message = message.strip()
+
+    # Validate the submitted fields.
+    if not name or len(name) > 100:
+        return JSONResponse(
+            {"detail": "Please enter a name of 1–100 characters."},
+            status_code=400,
+        )
+
+    if (
+        len(email) > 254
+        or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email)
+    ):
+        return JSONResponse(
+            {"detail": "Please enter a valid email address."},
+            status_code=400,
+        )
+
+    if not subject or len(subject) > 150:
+        return JSONResponse(
+            {"detail": "Please enter a subject of 1–150 characters."},
+            status_code=400,
+        )
+
+    if not message or len(message) > 5000:
+        return JSONResponse(
+            {"detail": "Please enter a message of 1–5000 characters."},
+            status_code=400,
+        )
+
+    api_key = os.getenv("RESEND_API_KEY")
+    recipient = os.getenv("CONTACT_TO_EMAIL")
+
+    if not api_key or not recipient:
+        return JSONResponse(
+            {
+                "detail": (
+                    "Email delivery is not configured yet. "
+                    "Please try again later."
+                )
+            },
+            status_code=503,
+        )
+
+    # Keep the visitor's message as plain text.
+    email_text = (
+        "New enquiry received through DiagnoPath AI\n\n"
+        f"Name: {name}\n"
+        f"Sender email: {email}\n"
+        f"Subject: {subject}\n\n"
+        "Message:\n"
+        f"{message}\n"
+    )
+
+    payload = {
+        "from": "DiagnoPath AI <onboarding@resend.dev>",
+        "to": [recipient],
+        "reply_to": email,
+        "subject": f"[DiagnoPath AI Enquiry] {subject}",
+        "text": email_text,
+    }
+
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            result = json.loads(response.read().decode("utf-8"))
+
+        if not result.get("id"):
+            return JSONResponse(
+                {"detail": "The email service did not confirm delivery."},
+                status_code=502,
+            )
+
+        return JSONResponse({
+            "message": "Your enquiry has been accepted by the email service. Thank you!",
+        })
+
+    except urllib.error.HTTPError:
+        # Avoid exposing the API key or provider response to visitors.
+        return JSONResponse(
+            {
+                "detail": (
+                    "The email service could not accept your enquiry. "
+                    "Please try again later."
+                )
+            },
+            status_code=502,
+        )
+
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return JSONResponse(
+            {
+                "detail": (
+                    "We couldn't connect to the email service. "
+                    "Please try again later."
+                )
+            },
+            status_code=502,
+        )
 
 # =========================================================
 # PERSISTENT MANUAL CONSULTATION STORAGE
@@ -152,20 +338,20 @@ def require_doctor(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    destination = "/app" if current_doctor(request) else "/login"
-    return RedirectResponse(destination, status_code=302)
-
+    return templates.TemplateResponse(
+        request=request,
+        name="landing.html",
+        context={}
+    )
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    if current_doctor(request):
-        return RedirectResponse("/app", status_code=302)
-
     return templates.TemplateResponse(
         request=request,
         name="login.html",
         context={"request": request, "error": None},
     )
+
 
 
 @app.post("/login", response_class=HTMLResponse)

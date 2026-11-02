@@ -72,6 +72,41 @@ def init_db() -> None:
             )
 
 
+def register_doctor(
+    username: str,
+    full_name: str,
+    specialty: str,
+    password: str,
+) -> tuple[bool, str]:
+    """Register a doctor with a securely hashed password."""
+    username = username.strip()
+    full_name = full_name.strip()
+    specialty = specialty.strip() or "General Medicine"
+
+    if not username or not full_name or not password:
+        return False, "Please fill in all required fields."
+
+    if len(username) < 3:
+        return False, "Username must contain at least 3 characters."
+
+    if len(password) < 8:
+        return False, "Password must contain at least 8 characters."
+
+    try:
+        with _connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO doctors
+                    (username, full_name, specialty, password_hash)
+                VALUES (?, ?, ?, ?)
+                """,
+                (username, full_name, specialty, hash_password(password)),
+            )
+        return True, "Account created successfully."
+
+    except sqlite3.IntegrityError:
+        return False, "That username already exists. Please choose another."
+
 def authenticate(username: str, password: str) -> Optional[Dict[str, Any]]:
     with _connect() as conn:
         row = conn.execute(
